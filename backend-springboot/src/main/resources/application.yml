@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: defi-gestuel
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+# Le service de RECONNAISSANCE CompreFace (pas celui de vérification) : la clé se lit dans l'interface CompreFace,
+# application > service de type « Recognition ». Ne la mettez pas dans ce fichier : passez-la par la variable
+# d'environnement COMPREFACE_API_KEY.
+compreface:
+  url: ${COMPREFACE_URL:http://localhost:8000}
+  api-key: ${COMPREFACE_API_KEY:}
+  # Probabilité minimale qu'une zone de l'image soit un visage (filtre les faux visages trouvés dans le décor).
+  det-prob-threshold: 0.8
+  timeout: 20s
+
+challenge:
+  # Durée de vie d'un défi, des 3 étapes comprises.
+  ttl: 45s
+  # En dessous, aucun humain n'a pu montrer 3 chiffres : c'est un automate.
+  min-duration: 2s
+  # Ressemblance minimale exigée sur chacune des 3 photos.
+  min-similarity: 0.85
+  # Les défis terminés ou expirés sont oubliés après ce délai (le verdict reste consultable jusque-là).
+  retention: 5m
+  cleanup-interval: 30s
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:4200}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    com.defigestuel: INFO
