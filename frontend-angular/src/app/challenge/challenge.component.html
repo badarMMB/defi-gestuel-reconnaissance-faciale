@@ -1,0 +1,130 @@
+<div class="layout">
+  <section class="stage" aria-label="Caméra">
+    <div class="video-box" [class.off]="!cameraOn()">
+      <video #video autoplay playsinline muted aria-label="Image de la caméra"></video>
+      <canvas #overlay aria-hidden="true"></canvas>
+      @if (!cameraOn()) {
+        <div class="placeholder">
+          @if (phase() === 'loading') {
+            <span class="spinner" aria-hidden="true"></span>
+            <p>Ouverture de la caméra et chargement des modèles…</p>
+          } @else {
+            <p>La caméra s'ouvrira au démarrage du défi.</p>
+          }
+        </div>
+      }
+      @if (phase() === 'running' || phase() === 'sending') {
+        <div class="target" aria-live="polite">
+          <span class="target-label">Montrez</span>
+          <span class="target-digit">{{ targetDigit() }}</span>
+          <span class="target-label">doigt{{ targetDigit() === 1 || targetDigit() === 0 ? '' : 's' }}</span>
+        </div>
+      }
+    </div>
+    @if (cameraOn()) {
+      <ul class="checks" aria-label="Ce que la caméra voit">
+        <li [class.ok]="faceCount() === 1" [class.bad]="faceCount() !== 1">
+          <span class="dot" aria-hidden="true"></span>Visage : {{ faceCount() }}
+        </li>
+        <li [class.ok]="handCount() === 2" [class.bad]="handCount() !== 2">
+          <span class="dot" aria-hidden="true"></span>Mains : {{ handCount() }}
+        </li>
+        <li [class.ok]="digit() !== null && digit() === targetDigit()" [class.warn]="digit() !== null && digit() !== targetDigit()">
+          <span class="dot" aria-hidden="true"></span>Doigts comptés : {{ digit() ?? '—' }}
+        </li>
+        <li class="muted">MediaPipe sur le {{ delegate() }}</li>
+      </ul>
+    }
+  </section>
+
+  <section class="panel" aria-label="Défi">
+    <h2>Défi à {{ totalSteps() }} chiffres</h2>
+
+    @if (challengeId()) {
+      <ol class="steps">
+        @for (s of stepsList(); track s) {
+          @let done = doneStep(s);
+          <li [class.current]="s === step() && !verdict()" [class.done]="!!done">
+            <span class="step-no">Étape {{ s }}</span>
+            @if (done) {
+              <img [src]="done.photo" [alt]="'Photo de l\'étape ' + s" />
+              <span class="step-digit">{{ done.digit }}</span>
+            } @else if (s === step() && targetDigit() !== null) {
+              <span class="step-digit big">{{ targetDigit() }}</span>
+            } @else {
+              <span class="step-digit hidden">?</span>
+            }
+          </li>
+        }
+      </ol>
+    }
+
+    @if (phase() === 'running' || phase() === 'sending') {
+      <div class="countdown" [class.urgent]="remaining() <= 10" role="timer" [attr.aria-label]="remaining() + ' secondes restantes'">
+        <div class="bar"><div class="fill" [style.width.%]="remainingRatio() * 100"></div></div>
+        <span>{{ remaining() }} s</span>
+      </div>
+      <button type="button" class="primary capture" [disabled]="!canCapture() || phase() === 'sending'" (click)="capture()">
+        @if (phase() === 'sending') { <span class="spinner small" aria-hidden="true"></span> Vérification… }
+        @else { Capturer et valider l'étape {{ step() }} }
+      </button>
+      @if (blocker()) {
+        <p class="hint">{{ blocker() }}</p>
+      } @else if (digit() !== null && digit() !== targetDigit()) {
+        <p class="hint warn">Vous montrez {{ digit() }}, le chiffre demandé est {{ targetDigit() }}.</p>
+      } @else {
+        <p class="hint ok">Prêt : appuyez sur le bouton.</p>
+      }
+      <button type="button" class="link" [disabled]="phase() === 'sending'" (click)="newChallenge()">Abandonner et recommencer avec un nouveau code</button>
+    }
+
+    @if (error()) {
+      <div class="alert" role="alert">{{ error() }}</div>
+    }
+
+    @if (verdict(); as v) {
+      <div class="verdict" [class.approved]="v.decision === 'APPROVED'" [class.rejected]="v.decision === 'REJECTED'" role="status">
+        <p class="verdict-title">
+          @if (v.decision === 'APPROVED') { ✓ Accepté : {{ v.subject }} } @else { ✗ Refusé }
+        </p>
+        @if (v.reasons.length) {
+          <ul>
+            @for (r of v.reasons; track $index) { <li>{{ r }}</li> }
+          </ul>
+        }
+        <table>
+          <caption>Détail, en {{ (v.durationMillis / 1000).toFixed(1).replace('.', ',') }} s</caption>
+          <thead><tr><th>Étape</th><th>Demandé</th><th>Montré</th><th>Personne</th><th>Ressemblance</th></tr></thead>
+          <tbody>
+            @for (s of v.steps; track s.step) {
+              <tr>
+                <td>{{ s.step }}</td>
+                <td>{{ s.expectedDigit }}</td>
+                <td [class.bad]="s.detectedDigit !== s.expectedDigit">{{ s.detectedDigit }}</td>
+                <td>{{ s.subject ?? '—' }}</td>
+                <td>{{ percent(s.similarity) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (phase() === 'idle' || phase() === 'done') {
+      <button type="button" class="primary" (click)="start()">{{ challengeId() ? 'Nouveau défi' : 'Démarrer le défi' }}</button>
+    }
+    @if (phase() === 'creating') {
+      <p class="hint"><span class="spinner small" aria-hidden="true"></span> Création du défi…</p>
+    }
+
+    <details class="help">
+      <summary>Comment faire</summary>
+      <ol>
+        <li>Placez-vous face à la caméra, le visage et les deux mains dans l'image.</li>
+        <li>Montrez le chiffre demandé avec vos doigts, en comptant les deux mains : 7 = une main ouverte et deux doigts de l'autre ; 0 = deux poings.</li>
+        <li>Quand les deux mains et le visage sont reconnus, appuyez sur « Capturer ».</li>
+        <li>Trois chiffres, 45 secondes en tout.</li>
+      </ol>
+    </details>
+  </section>
+</div>
