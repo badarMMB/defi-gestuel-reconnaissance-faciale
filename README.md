@@ -88,3 +88,14 @@ Les essais du 23 novembre 2026, avec le vrai CompreFace, ont montré trois faibl
    mains.
 3. **La reconnaissance se fait parmi toute la collection.** Le défi dit qui est devant la caméra, pas si c'est le
    payeur attendu. Pour un paiement, il faut comparer à la seule photo de référence du payeur.
+
+## Composants tiers
+
+Les deux modèles du dossier `frontend-angular/public/models/` sont ceux de Google MediaPipe, redistribués sans
+modification sous [licence Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) :
+
+- `face_detector.tflite` : BlazeFace courte portée ([fiche](https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector)) ;
+- `hand_landmarker.task` : détection et repères des mains ([fiche](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)).
+
+CompreFace (Exadel), MediaPipe Tasks Vision, Spring Boot et Angular sont utilisés comme dépendances, chacun sous sa
+propre licence (Apache 2.0 ou MIT).
