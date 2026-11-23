@@ -29,6 +29,13 @@ frontend-angular/     Angular 22 : caméra, MediaPipe (visage + mains) dans le n
    Ouvrez <http://localhost:4200>. La caméra n'est permise qu'en https, ou sur `localhost`. Ajoutez `?delegate=CPU` à
    l'adresse si la carte graphique de l'appareil pose problème.
 
+## Validation automatique
+
+L'écran envoie la photo tout seul dès que le chiffre demandé est montré et tenu 0,7 seconde, avec un seul visage et
+deux mains. Un comptage qui clignote ne déclenche rien. Si deux chiffres de suite sont identiques, il faut baisser les
+mains entre les deux : une même pose ne valide jamais deux étapes. Une case permet de couper la validation automatique
+et de valider avec le bouton.
+
 ## L'API
 
 | Appel | Rôle |

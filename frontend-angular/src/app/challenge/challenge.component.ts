@@ -4,6 +4,11 @@ import { HAND_CONNECTIONS, Frame, Vision } from '../vision/vision';
 import { ChallengeApi, Verdict, describeError } from './challenge-api';
 
 const DETECTION_INTERVAL_MS = 66;
+/**
+ * Validation automatique : le bon chiffre doit être lu sans interruption pendant ce temps avant que la photo parte.
+ * Un comptage qui clignote une image sur deux ne déclenche donc rien, et la photo prise est celle d'une pose tenue.
+ */
+const HOLD_MS = 700;
 
 type Phase = 'idle' | 'loading' | 'creating' | 'running' | 'sending' | 'done';
 
@@ -16,8 +21,11 @@ interface DoneStep {
 /**
  * Le défi gestuel : le serveur tire un code de 3 chiffres ; pour chaque chiffre, la personne le montre avec les doigts
  * de ses deux mains, le visage dans l'image ; MediaPipe compte les doigts dans le navigateur ; une photo de l'image
- * entière part au serveur, qui vérifie le chiffre et fait reconnaître le visage par CompreFace. Le bouton de capture
- * n'est actif que si l'image montre exactement un visage et deux mains.
+ * entière part au serveur, qui vérifie le chiffre et fait reconnaître le visage par CompreFace.
+ *
+ * La photo part toute seule dès que le chiffre demandé est montré et tenu {@link HOLD_MS} ms, avec exactement un visage
+ * et deux mains. Si le chiffre suivant est le même, il faut d'abord changer de pose : une même pose ne valide jamais deux
+ * étapes. Le bouton reste là pour valider à la main, ou quand la validation automatique est coupée.
  */
 @Component({
   selector: 'app-challenge',
@@ -43,6 +51,11 @@ export class ChallengeComponent implements OnDestroy {
   protected readonly error = signal('');
   protected readonly cameraOn = signal(false);
   protected readonly delegate = signal('');
+  protected readonly autoMode = signal(true);
+  /** Où en est la pose tenue, de 0 à 1 ; à 1, la photo part. */
+  protected readonly holdProgress = signal(0);
+  /** Le bon chiffre est montré, mais c'est encore la pose de l'étape précédente : il faut la défaire d'abord. */
+  protected readonly waitingNewPose = signal(false);
 
   protected readonly faceCount = computed(() => this.frame()?.faces.length ?? 0);
   protected readonly handCount = computed(() => this.frame()?.hands.length ?? 0);
@@ -78,6 +91,9 @@ export class ChallengeComponent implements OnDestroy {
   private timerId: ReturnType<typeof setInterval> | null = null;
   private lastVideoTime = -1;
   private lastDetection = 0;
+  private matchSince = 0;
+  /** Faux juste après une photo, vrai dès que l'image ne montre plus le chiffre demandé. */
+  private armed = true;
 
   protected async start(): Promise<void> {
     this.error.set('');
@@ -103,6 +119,8 @@ export class ChallengeComponent implements OnDestroy {
     this.error.set('');
     this.verdict.set(null);
     this.doneSteps.set([]);
+    this.resetHold();
+    this.armed = true;
     this.phase.set('creating');
     try {
       const created = await firstValueFrom(this.api.create());
@@ -128,6 +146,8 @@ export class ChallengeComponent implements OnDestroy {
     }
     this.phase.set('sending');
     this.error.set('');
+    this.resetHold();
+    this.armed = false;
     const step = this.step();
     const target = this.targetDigit();
     let image: Blob;
@@ -207,6 +227,7 @@ export class ChallengeComponent implements OnDestroy {
       const frame = this.vision.detect(video, now);
       this.frame.set(frame);
       this.draw(frame, video);
+      this.checkAutoCapture(now);
       if (isDevMode()) {
         // Pour les essais automatisés et le réglage du comptage : la dernière analyse, lisible depuis la console.
         (window as unknown as { __defiGestuel?: unknown }).__defiGestuel = { frame, at: Date.now() };
@@ -214,6 +235,47 @@ export class ChallengeComponent implements OnDestroy {
     }
     this.rafId = requestAnimationFrame(this.loop);
   };
+
+  /** Déclenche la photo quand le chiffre demandé est tenu assez longtemps, voir {@link HOLD_MS}. */
+  private checkAutoCapture(now: number): void {
+    if (this.phase() !== 'running') {
+      return;
+    }
+    const matching = this.canCapture() && this.digit() === this.targetDigit();
+    if (!matching) {
+      this.armed = true;
+      this.waitingNewPose.set(false);
+      this.resetHold();
+      return;
+    }
+    if (!this.autoMode()) {
+      this.resetHold();
+      return;
+    }
+    if (!this.armed) {
+      this.waitingNewPose.set(true);
+      return;
+    }
+    if (this.matchSince === 0) {
+      this.matchSince = now;
+    }
+    const progress = Math.min(1, (now - this.matchSince) / HOLD_MS);
+    this.holdProgress.set(progress);
+    if (progress >= 1) {
+      void this.capture();
+    }
+  }
+
+  private resetHold(): void {
+    this.matchSince = 0;
+    this.holdProgress.set(0);
+    this.waitingNewPose.set(false);
+  }
+
+  protected toggleAuto(on: boolean): void {
+    this.autoMode.set(on);
+    this.resetHold();
+  }
 
   /** Le cadre des visages et le squelette des mains, sur un calque transparent posé sur la vidéo. */
   private draw(frame: Frame, video: HTMLVideoElement): void {

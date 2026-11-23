@@ -66,14 +66,28 @@
       </div>
       <button type="button" class="primary capture" [disabled]="!canCapture() || phase() === 'sending'" (click)="capture()">
         @if (phase() === 'sending') { <span class="spinner small" aria-hidden="true"></span> Vérification… }
+        @else if (autoMode()) { Valider l'étape {{ step() }} maintenant }
         @else { Capturer et valider l'étape {{ step() }} }
       </button>
-      @if (blocker()) {
+      <label class="auto">
+        <input type="checkbox" [checked]="autoMode()" (change)="toggleAuto($any($event.target).checked)" />
+        Valider automatiquement dès que le bon chiffre est montré
+      </label>
+      @if (phase() === 'sending') {
+        <p class="hint">Photo envoyée, vérification du visage…</p>
+      } @else if (blocker()) {
         <p class="hint">{{ blocker() }}</p>
       } @else if (digit() !== null && digit() !== targetDigit()) {
         <p class="hint warn">Vous montrez {{ digit() }}, le chiffre demandé est {{ targetDigit() }}.</p>
-      } @else {
+      } @else if (!autoMode()) {
         <p class="hint ok">Prêt : appuyez sur le bouton.</p>
+      } @else if (waitingNewPose()) {
+        <p class="hint warn">Même chiffre que l'étape précédente : baissez les mains, puis montrez à nouveau {{ targetDigit() }}.</p>
+      } @else {
+        <div class="hold" role="status">
+          <p class="hint ok">Bon chiffre : gardez la pose…</p>
+          <div class="bar"><div class="fill" [style.width.%]="holdProgress() * 100"></div></div>
+        </div>
       }
       <button type="button" class="link" [disabled]="phase() === 'sending'" (click)="newChallenge()">Abandonner et recommencer avec un nouveau code</button>
     }
@@ -122,7 +136,7 @@
       <ol>
         <li>Placez-vous face à la caméra, le visage et les deux mains dans l'image.</li>
         <li>Montrez le chiffre demandé avec vos doigts, en comptant les deux mains : 7 = une main ouverte et deux doigts de l'autre ; 0 = deux poings.</li>
-        <li>Quand les deux mains et le visage sont reconnus, appuyez sur « Capturer ».</li>
+        <li>Gardez la pose un instant : l'étape est validée toute seule, puis le chiffre suivant s'affiche. Si deux chiffres de suite sont identiques, baissez les mains entre les deux.</li>
         <li>Trois chiffres, 45 secondes en tout.</li>
       </ol>
     </details>
