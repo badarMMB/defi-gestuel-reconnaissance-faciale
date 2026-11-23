@@ -32,7 +32,7 @@
         <li [class.ok]="digit() !== null && digit() === targetDigit()" [class.warn]="digit() !== null && digit() !== targetDigit()">
           <span class="dot" aria-hidden="true"></span>Doigts comptés : {{ digit() ?? '—' }}
         </li>
-        <li class="muted">MediaPipe sur le {{ delegate() }}</li>
+        <li class="muted">MediaPipe sur le {{ delegate() }} · {{ rate() }} analyses/s</li>
       </ul>
     }
   </section>

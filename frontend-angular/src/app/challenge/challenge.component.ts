@@ -57,6 +57,8 @@ export class ChallengeComponent implements OnDestroy {
   protected readonly error = signal('');
   protected readonly cameraOn = signal(false);
   protected readonly delegate = signal('');
+  /** Combien d'analyses par seconde la machine arrive à faire, mesuré sur la dernière seconde. */
+  protected readonly rate = signal(0);
   protected readonly autoMode = signal(true);
   /** Où en est la pose tenue, de 0 à 1 ; à 1, la photo part. */
   protected readonly holdProgress = signal(0);
@@ -101,6 +103,8 @@ export class ChallengeComponent implements OnDestroy {
   private timerId: ReturnType<typeof setInterval> | null = null;
   private lastVideoTime = -1;
   private lastDetection = 0;
+  private rateCount = 0;
+  private rateSince = 0;
   private matchSince = 0;
   /** Faux juste après une photo, vrai dès que l'image ne montre plus le chiffre demandé. */
   private armed = true;
@@ -235,6 +239,12 @@ export class ChallengeComponent implements OnDestroy {
       this.lastVideoTime = video.currentTime;
       this.lastDetection = now;
       const frame = this.vision.detect(video, now);
+      this.rateCount++;
+      if (now - this.rateSince >= 1000) {
+        this.rate.set(Math.round((this.rateCount * 1000) / (now - this.rateSince)));
+        this.rateCount = 0;
+        this.rateSince = now;
+      }
       this.frame.set(frame);
       this.draw(frame, video);
       this.checkAutoCapture(now);

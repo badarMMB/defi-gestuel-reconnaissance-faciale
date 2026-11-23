@@ -38,6 +38,7 @@ export class Vision {
   private scanned: Region[][] = [];
   private scanSize = '';
   private scanIndex: number[] = [];
+  private relaxedLevel = 0;
 
   private constructor(
     private readonly faces: FaceDetector,
@@ -68,8 +69,9 @@ export class Vision {
         runningMode: 'VIDEO',
         // Jusqu'à 4 mains : on veut savoir s'il y en a trop, pas seulement en trouver deux.
         numHands: 4,
-        minHandDetectionConfidence: 0.6,
-        minHandPresenceConfidence: 0.6,
+        // Les valeurs par défaut de MediaPipe : à 0,6, une main qui entre en bougeant était vue plus tard que l'autre.
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
       return new Vision(faces, hands, delegate);
@@ -98,6 +100,10 @@ export class Vision {
   /**
    * Les visages de l'image. Candidats : l'image entière, les visages de l'analyse précédente et quelques carrés du
    * balayage ; chaque candidat ne compte que s'il est confirmé dans son carré serré. Voir face-search.ts.
+   *
+   * Quand un seul visage est déjà suivi, le balayage ne sert plus qu'à repérer une deuxième personne : un seul carré
+   * par analyse suffit, et laisse le temps au détecteur de mains. CompreFace recompte de toute façon les visages sur
+   * chaque photo, côté serveur.
    */
   private findFaces(video: HTMLVideoElement): FaceBox[] {
     const w = video.videoWidth;
@@ -108,13 +114,19 @@ export class Vision {
       this.scanIndex = this.scanned.map(() => 0);
     }
     const candidates = [...this.facesIn(video), ...this.tracked];
-    SCAN_LEVELS.forEach(({ perFrame }, level) => {
+    const scan = (level: number, count: number) => {
       const regions = this.scanned[level];
-      for (let i = 0; i < Math.min(perFrame, regions.length); i++) {
+      for (let i = 0; i < Math.min(count, regions.length); i++) {
         candidates.push(...this.facesInRegion(video, regions[this.scanIndex[level]], w, h));
         this.scanIndex[level] = (this.scanIndex[level] + 1) % regions.length;
       }
-    });
+    };
+    if (this.tracked.length === 1) {
+      scan(this.relaxedLevel, 1);
+      this.relaxedLevel = (this.relaxedLevel + 1) % SCAN_LEVELS.length;
+    } else {
+      SCAN_LEVELS.forEach(({ perFrame }, level) => scan(level, perFrame));
+    }
     const faces: FaceBox[] = [];
     for (const candidate of mergeFaces(candidates)) {
       const face = confirmed(candidate, this.facesInRegion(video, confirmRegion(candidate, w, h), w, h));
