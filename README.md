@@ -36,6 +36,18 @@ deux mains. Un comptage qui clignote ne déclenche rien. Si deux chiffres de sui
 mains entre les deux : une même pose ne valide jamais deux étapes. Une case permet de couper la validation automatique
 et de valider avec le bouton.
 
+## Distance à la caméra
+
+Le visage est reconnu jusqu'à 2 ou 3 mètres d'une caméra 1280 × 720 ordinaire (un visage d'environ 32 pixels de
+large). Au-delà, l'écran demande de se rapprocher.
+
+- **Dans le navigateur**, le détecteur de visages de MediaPipe ne voit pas un visage plus petit qu'un septième de
+  l'image : au-delà d'un mètre, il le perd. Le visage est donc aussi cherché dans des morceaux agrandis de l'image, puis
+  confirmé dans un carré serré autour de lui, ce qui écarte les mains prises pour des visages. Détail dans
+  `frontend-angular/src/app/vision/face-search.ts`.
+- **Dans CompreFace**, le réglage `max_detect_size` doit valoir 1280 : à 640, la valeur par défaut, la photo est
+  divisée par deux avant la recherche, et un visage lointain n'est plus trouvé.
+
 ## L'API
 
 | Appel | Rôle |

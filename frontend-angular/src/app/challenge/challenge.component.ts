@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnDestroy, computed, inject, isDevMode, signal, viewChild } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { HAND_CONNECTIONS, Frame, Vision } from '../vision/vision';
+import type { Region } from '../vision/face-search';
 import { ChallengeApi, Verdict, describeError } from './challenge-api';
 
 const DETECTION_INTERVAL_MS = 66;
@@ -9,6 +10,11 @@ const DETECTION_INTERVAL_MS = 66;
  * Un comptage qui clignote une image sur deux ne déclenche donc rien, et la photo prise est celle d'une pose tenue.
  */
 const HOLD_MS = 700;
+/**
+ * Un visage plus étroit que cette part de la largeur de l'image (32 pixels sur 1280) est trop loin : CompreFace le
+ * trouverait encore, mais le reconnaîtrait mal (mesuré : ressemblance sous 85 % en dessous de 25 pixels environ).
+ */
+const MIN_FACE_WIDTH_RATIO = 0.025;
 
 type Phase = 'idle' | 'loading' | 'creating' | 'running' | 'sending' | 'done';
 
@@ -76,6 +82,10 @@ export class ChallengeComponent implements OnDestroy {
     }
     if (this.faceCount() > 1) {
       return 'Un seul visage doit être dans l\'image';
+    }
+    const frame = this.frame()!;
+    if (frame.faces[0].width < frame.imageWidth * MIN_FACE_WIDTH_RATIO) {
+      return 'Votre visage est trop loin : rapprochez-vous de la caméra';
     }
     const problem = this.frame()?.reading.problem;
     if (problem) {
@@ -230,7 +240,7 @@ export class ChallengeComponent implements OnDestroy {
       this.checkAutoCapture(now);
       if (isDevMode()) {
         // Pour les essais automatisés et le réglage du comptage : la dernière analyse, lisible depuis la console.
-        (window as unknown as { __defiGestuel?: unknown }).__defiGestuel = { frame, at: Date.now() };
+        (window as unknown as { __defiGestuel?: unknown }).__defiGestuel = { frame, at: Date.now(), probe: (r: Region) => this.vision?.probe(video, r) };
       }
     }
     this.rafId = requestAnimationFrame(this.loop);

@@ -72,3 +72,7 @@ Conseils pour les photos de référence :
 
 Si une instance tourne déjà, par exemple sur le port 8001, inutile d'en démarrer une seconde. Créez-y un service
 **Recognition** et pointez le backend dessus : `COMPREFACE_URL=http://localhost:8001`.
+
+Vérifiez alors son réglage `max_detect_size` dans son fichier `.env` : à 640, la valeur par défaut, les visages à
+plus d'un mètre et demi de la caméra ne sont pas trouvés. Passez-le à 1280, puis redémarrez seulement le moteur :
+`docker compose up -d --no-deps compreface-core`.
